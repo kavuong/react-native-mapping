@@ -1,14 +1,15 @@
 import React from "react";
 import { Text, StyleSheet, View } from "react-native";
 
-const Home = () => {
+const Result = (props) => {
+  const eanInput = props.navigation.getParam("ean13");
   return (
     <View style={styles.container}>
-      <Text>Hello</Text>
+      <Text>Hello Results</Text>
+      <Text>Input EAN is {eanInput}</Text>
     </View>
   );
 };
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -18,4 +19,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default Home;
+export default Result;
