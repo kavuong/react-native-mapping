@@ -44,7 +44,7 @@ def upc_to_details(ean_code):
 
     json_resp = response.json()['items']
 
-    return {'title': json_resp['title'], 'description': json_resp['description'], 'image': json_resp['images'][0], 'upc': json_resp['upc']}
+    return {'title': json_resp['title'], 'description': json_resp['description'], 'image': json_resp['images'][0], 'upc': json_resp['upc'], 'link': json_resp['pricing'][0]['link']}
 
 
 if __name__ == '__main__':
