@@ -5,20 +5,20 @@ import MapView, {
   Polyline,
   PROVIDER_GOOGLE,
 } from "react-native-maps";
-import { StyleSheet } from "react-native";
+import {
+  StyleSheet,
+  View,
+  Text,
+  TouchableOpacity,
+  Platform,
+} from "react-native";
+import haversine from "haversine";
 
-const LATITUDE = 37.7;
+const LATITUDE = 1.7;
 const LONGITUDE = -130;
-const LATITUDE_DELTA = 0.0922;
-const LONGITUDE_DELTA = 0.0421;
+const LATITUDE_DELTA = 0.00922;
+const LONGITUDE_DELTA = 0.00421;
 const Map = () => {
-  const mapRegion = {
-    latitude: 37.7,
-    longitude: -130,
-    latitudeDelta: 0.0922,
-    longitudeDelta: 0.0421,
-  };
-
   const [region, setRegion] = useState({
     latitude: LATITUDE,
     longitude: LONGITUDE,
@@ -26,21 +26,9 @@ const Map = () => {
     longitudeDelta: LONGITUDE_DELTA,
   });
 
-  const [latitude, setLatitude] = useState(LATITUDE);
-  const [longitude, setLongitude] = useState(LONGITUDE);
   const [routeCoordinates, setRouteCoordinates] = useState([]);
   const [distanceTravelled, setDistanceTravelled] = useState(0);
   const [prevLatLng, setPrevLatLng] = useState({});
-  const [coordinate, setCoordinate] = useState(
-    new AnimatedRegion({
-      latitude: LATITUDE,
-      longitude: LONGITUDE,
-    })
-  );
-
-  useEffect(() => {
-    getCurrentPosition();
-  });
 
   const getCurrentPosition = () => {
     try {
@@ -74,44 +62,88 @@ const Map = () => {
     }
   };
 
-  //   useEffect(() => {
-  //     const watchID = navigator.geolocation.watchPosition(
-  //       (position) => {
-  //         // const { coordinate, routeCoordinates, distanceTravelled } = this.state;
-  //         const { latitude, longitude } = position.coords;
+  useEffect(() => {
+    getCurrentPosition();
 
-  //         const newCoordinate = {
-  //           latitude,
-  //           longitude,
-  //         };
-  //         if (Platform.OS === "android") {
-  //           if (this.marker) {
-  //             this.marker._component.animateMarkerToCoordinate(
-  //               newCoordinate,
-  //               500
-  //             );
-  //           }
-  //         } else {
-  //           coordinate.timing(newCoordinate).start();
-  //         }
+    // will need to add support for Android
+    // https://medium.com/quick-code/react-native-location-tracking-14ab2c9e2db8
+    const watchID = navigator.geolocation.watchPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
 
-  //         setLatitude(latitude)
-  //         setLongitude(longitude)
-  //         setRouteCoordinates(routeCoordinates.concat([newCoordinate]))
-  //         setDistanceTravelled(distanceTravelled + this.calcDistance(newCoordinate))
-  //         setPrevLatLng(newCoordinate)
+        const newCoordinate = {
+          latitude,
+          longitude,
+        };
+        setLatitude(latitude);
+        setLongitude(longitude);
+        setRouteCoordinates(routeCoordinates.concat([newCoordinate]));
+        setDistanceTravelled(
+          distanceTravelled + this.calcDistance(newCoordinate)
+        );
+        setPrevLatLng(newCoordinate);
+      },
+      (error) => console.log(error),
+      {
+        enableHighAccuracy: true,
+        timeout: 20000,
+        maximumAge: 1000,
+        distanceFilter: 10,
+      }
+    );
+    navigator.geolocation.clearWatch(watchID);
+  });
 
-  //       },
-  //       (error) => console.log(error),
-  //       { enableHighAccuracy: true, timeout: 20000, maximumAge: 1000 }
-  //     );
-  //   });
-  return <MapView style={styles.map} region={region} />;
+  calcDistance = (newLatLng) => {
+    return haversine(prevLatLng, newLatLng) || 0;
+  };
+
+  return (
+    <View style={styles.container}>
+      <MapView style={styles.map} region={region}>
+        <Polyline coordinates={routeCoordinates} strokeWidth={5} />
+        <Marker
+          coordinate={{
+            latitude: region.latitude,
+            longitude: region.longitude,
+          }}
+        />
+      </MapView>
+      <View style={styles.buttonContainer}>
+        <TouchableOpacity style={[styles.bubble, styles.button]}>
+          <Text>{parseFloat(distanceTravelled).toFixed(2)} km</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
 };
 
 const styles = StyleSheet.create({
+  container: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "flex-end",
+    alignItems: "center",
+  },
   map: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  buttonContainer: {
+    flexDirection: "row",
+    marginVertical: 20,
+    backgroundColor: "transparent",
+  },
+  button: {
+    width: 80,
+    paddingHorizontal: 12,
+    alignItems: "center",
+    marginHorizontal: 10,
+  },
+  bubble: {
     flex: 1,
+    backgroundColor: "rgba(255,255,255,0.7)",
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 20,
   },
 });
 
