@@ -6,7 +6,7 @@ import { createBottomTabNavigator } from "react-navigation-tabs";
 import HomeScreen from "../screens/HomeScreen";
 import BarcodeScreen from "../screens/BarcodeScreen";
 import ResultScreen from "../screens/ResultScreen";
-import MapScreen2 from "../screens/MapScreen2";
+import MapScreen from "../screens/MapScreen";
 
 const ScanNavigator = createStackNavigator({
   Camera: BarcodeScreen,
@@ -16,7 +16,7 @@ const ScanNavigator = createStackNavigator({
 const PetNavigator = createBottomTabNavigator({
   Home: HomeScreen,
   Scan: ScanNavigator,
-  Map: MapScreen2,
+  Map: MapScreen,
 });
 
 export default createAppContainer(PetNavigator);

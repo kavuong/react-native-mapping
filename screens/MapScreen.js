@@ -1,143 +1,164 @@
 import React, { useState, useEffect } from "react";
-import MapView, {
-  Marker,
-  AnimatedRegion,
-  Polyline,
-  PROVIDER_GOOGLE,
-} from "react-native-maps";
 import {
-  StyleSheet,
-  View,
-  Text,
-  TouchableOpacity,
   Platform,
+  Text,
+  View,
+  StyleSheet,
+  Button,
+  TouchableOpacity,
 } from "react-native";
+import Constants from "expo-constants";
+import * as Location from "expo-location";
+import * as Permissions from "expo-permissions";
+import MapView, { Marker, Polyline } from "react-native-maps";
 import haversine from "haversine";
 
-const LATITUDE = 1.7;
-const LONGITUDE = -130;
+const LATITUDE = 37.7749;
+const LONGITUDE = -122.4194;
 const LATITUDE_DELTA = 0.00922;
 const LONGITUDE_DELTA = 0.00421;
-const Map = () => {
+
+// keeps track of
+let location = null;
+
+export default function App() {
   const [region, setRegion] = useState({
     latitude: LATITUDE,
     longitude: LONGITUDE,
     latitudeDelta: LATITUDE_DELTA,
     longitudeDelta: LONGITUDE_DELTA,
   });
-
+  // variable keeping track of whether we have progressed from the first location or not
+  const [before, setBefore] = useState(true);
+  const [stop, setStop] = useState(false);
+  const [errorMsg, setErrorMsg] = useState(null);
   const [routeCoordinates, setRouteCoordinates] = useState([]);
-  const [distanceTravelled, setDistanceTravelled] = useState(0);
-  const [prevLatLng, setPrevLatLng] = useState({});
+  const [distTravelled, setDistTravelled] = useState(0);
 
-  const getCurrentPosition = () => {
-    try {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const region = {
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
+  const getLocationAsync = async () => {
+    const { status } = await Permissions.askAsync(Permissions.LOCATION);
+    if (status === "granted") {
+      location = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.High,
+          distanceInterval: 50,
+          timeInterval: 1000,
+        },
+        (newLocation) => {
+          let coords = newLocation.coords;
+          // this.props.getMyLocation sets my reducer state my_location
+          const newRegion = {
+            latitude: coords.latitude,
+            longitude: coords.longitude,
             latitudeDelta: LATITUDE_DELTA,
             longitudeDelta: LONGITUDE_DELTA,
           };
-          setRegion(region);
+          setRegion(() => newRegion);
+          let newLoc = {
+            latitude: coords.latitude,
+            longitude: coords.longitude,
+          };
+          setRouteCoordinates((oldCoordinates) => [...oldCoordinates, newLoc]);
         },
-        (error) => {
-          //TODO: better design
-          switch (error.code) {
-            case 1:
-              if (Platform.OS === "ios") {
-                Alert.alert("", "iOS location settings not toggled error");
-              } else {
-                Alert.alert("", "Android location settings not toggled error");
-              }
-              break;
-            default:
-              Alert.alert("", "Could not detect location");
-          }
-        }
+        (error) => console.log(error)
       );
-    } catch (e) {
-      alert(e.message || "");
+    } else {
+      setErrorMsg("Location services needed");
     }
   };
 
-  useEffect(() => {
-    getCurrentPosition();
-
-    // will need to add support for Android
-    // https://medium.com/quick-code/react-native-location-tracking-14ab2c9e2db8
-    const watchID = navigator.geolocation.watchPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-
-        const newCoordinate = {
-          latitude,
-          longitude,
-        };
-        setLatitude(latitude);
-        setLongitude(longitude);
-        setRouteCoordinates(routeCoordinates.concat([newCoordinate]));
-        setDistanceTravelled(
-          distanceTravelled + this.calcDistance(newCoordinate)
-        );
-        setPrevLatLng(newCoordinate);
-      },
-      (error) => console.log(error),
-      {
-        enableHighAccuracy: true,
-        timeout: 20000,
-        maximumAge: 1000,
-        distanceFilter: 10,
-      }
-    );
-    navigator.geolocation.clearWatch(watchID);
-  });
-
-  calcDistance = (newLatLng) => {
-    return haversine(prevLatLng, newLatLng) || 0;
+  const calcDistance = (prevLatLng, newLatLng) => {
+    return haversine(prevLatLng, newLatLng);
   };
 
-  return (
+  const mapMarkers = () => {
+    return routeCoordinates.map((loc, index) => {
+      return (
+        <Marker
+          key={index}
+          coordinate={{ latitude: loc.latitude, longitude: loc.longitude }}
+        ></Marker>
+      );
+    });
+  };
+
+  // starts tracking async locations whenever before state is changed in onPress
+  useEffect(() => {
+    if (before === false) {
+      getLocationAsync();
+    }
+  }, [before]);
+
+  useEffect(() => {
+    if (stop === true) {
+      location.remove();
+    }
+  }, [stop]);
+
+  useEffect(() => {
+    const len = routeCoordinates.length;
+    if (len > 1) {
+      // updating distance travelled
+      const prevLatLng = routeCoordinates[len - 2];
+      const currLatLng = routeCoordinates[len - 1];
+      const newDist = distTravelled + calcDistance(prevLatLng, currLatLng);
+      setDistTravelled(() => newDist);
+    }
+  }, [routeCoordinates]);
+
+  return errorMsg ? (
+    <Text>{errorMsg}</Text>
+  ) : (
     <View style={styles.container}>
       <MapView style={styles.map} region={region}>
-        <Polyline coordinates={routeCoordinates} strokeWidth={5} />
-        <Marker
-          coordinate={{
-            latitude: region.latitude,
-            longitude: region.longitude,
-          }}
-        />
+        {before ? null : mapMarkers()}
+        <Polyline coordinates={routeCoordinates}></Polyline>
       </MapView>
       <View style={styles.buttonContainer}>
+        {before ? (
+          <Button
+            title="Start"
+            onPress={() => {
+              setBefore(false);
+              setStop(false);
+            }}
+          ></Button>
+        ) : (
+          <Button
+            title="Stop"
+            onPress={() => {
+              setStop(true);
+              setBefore(true);
+            }}
+          ></Button>
+        )}
         <TouchableOpacity style={[styles.bubble, styles.button]}>
-          <Text>{parseFloat(distanceTravelled).toFixed(2)} km</Text>
+          <Text style={styles.bottomBarContent}>
+            {parseFloat(distTravelled).toFixed(2)} km
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: "flex-end",
+    flex: 1,
     alignItems: "center",
+    justifyContent: "center",
+    paddingTop: Constants.statusBarHeight,
+    backgroundColor: "#ecf0f1",
+  },
+  paragraph: {
+    margin: 24,
+    fontSize: 18,
+    textAlign: "center",
   },
   map: {
     ...StyleSheet.absoluteFillObject,
   },
-  buttonContainer: {
-    flexDirection: "row",
-    marginVertical: 20,
-    backgroundColor: "transparent",
-  },
-  button: {
-    width: 80,
-    paddingHorizontal: 12,
-    alignItems: "center",
-    marginHorizontal: 10,
-  },
+
   bubble: {
     flex: 1,
     backgroundColor: "rgba(255,255,255,0.7)",
@@ -145,6 +166,15 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 20,
   },
+  button: {
+    width: 80,
+    paddingHorizontal: 12,
+    alignItems: "center",
+    marginHorizontal: 10,
+  },
+  buttonContainer: {
+    flexDirection: "row",
+    marginVertical: 20,
+    backgroundColor: "transparent",
+  },
 });
-
-export default Map;
