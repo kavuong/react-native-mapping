@@ -1,20 +1,22 @@
 import React, { useState, useEffect } from "react";
-import { Platform, Text, View, StyleSheet } from "react-native";
+import {
+  Platform,
+  Text,
+  View,
+  StyleSheet,
+  Button,
+  TouchableOpacity,
+} from "react-native";
 import Constants from "expo-constants";
 import * as Location from "expo-location";
 import * as Permissions from "expo-permissions";
 import MapView, { Marker } from "react-native-maps";
+import haversine from "haversine";
 
 const LATITUDE = 37.7749;
 const LONGITUDE = -122.4194;
 const LATITUDE_DELTA = 0.00922;
 const LONGITUDE_DELTA = 0.00421;
-
-const LOCATION_SETTINGS = {
-  accuracy: Location.Accuracy.Balanced,
-  timeInterval: 5000,
-  distanceInterval: 20000,
-};
 
 export default function App() {
   const [region, setRegion] = useState({
@@ -23,44 +25,11 @@ export default function App() {
     latitudeDelta: LATITUDE_DELTA,
     longitudeDelta: LONGITUDE_DELTA,
   });
+  // variable keeping track of whether we have progressed from the first location or not
+  const [before, setBefore] = useState(true);
   const [errorMsg, setErrorMsg] = useState(null);
   const [routeCoordinates, setRouteCoordinates] = useState([]);
-
-  //   const getCurrentPosition = () => {
-  //     try {
-  //       navigator.geolocation.getCurrentPosition(
-  //         (position) => {
-  //           const region = {
-  //             latitude: position.oords.latitude,
-  //             longitude: position.coords.longitude,
-  //             latitudeDelta: LATITUDE_DELTA,
-  //             longitudeDelta: LONGITUDE_DELTA,
-  //           };
-  //           setRegion(region);
-  //         },
-  //         (error) => {
-  //           //TODO: better design
-  //           switch (error.code) {
-  //             case 1:
-  //               if (Platform.OS === "ios") {
-  //                 Alert.alert("", "iOS location settings not toggled error");
-  //               } else {
-  //                 Alert.alert("", "Android location settings not toggled error");
-  //               }
-  //               break;
-  //             default:
-  //               Alert.alert("", "Could not detect location");
-  //           }
-  //         }
-  //       );
-  //     } catch (e) {
-  //       alert(e.message || "");
-  //     }
-  //   };
-
-  //   getCurrentPosition();
-
-  // TO DO: set location in initial state before proceeding
+  const [distTravelled, setDistTravelled] = useState(0);
 
   const getLocationAsync = async () => {
     const { status } = await Permissions.askAsync(Permissions.LOCATION);
@@ -68,7 +37,7 @@ export default function App() {
       location = await Location.watchPositionAsync(
         {
           accuracy: Location.Accuracy.High,
-          distanceInterval: 200,
+          distanceInterval: 50,
           timeInterval: 1000,
         },
         (newLocation) => {
@@ -94,9 +63,9 @@ export default function App() {
     }
   };
 
-  useEffect(() => {
-    getLocationAsync();
-  }, []);
+  const calcDistance = (prevLatLng, newLatLng) => {
+    return haversine(prevLatLng, newLatLng);
+  };
 
   const mapMarkers = () => {
     return routeCoordinates.map((loc, index) => {
@@ -109,12 +78,45 @@ export default function App() {
     });
   };
 
+  // starts tracking async locations whenever before state is changed in onPress
+  useEffect(() => {
+    getLocationAsync();
+  }, [before]);
+
+  useEffect(() => {
+    const len = routeCoordinates.length;
+    if (len > 1) {
+      // updating distance travelled
+      const prevLatLng = routeCoordinates[len - 2];
+      const currLatLng = routeCoordinates[len - 1];
+      const newDist = distTravelled + calcDistance(prevLatLng, currLatLng);
+      setDistTravelled(() => newDist);
+    }
+  }, [routeCoordinates]);
+
   return errorMsg ? (
     <Text>{errorMsg}</Text>
   ) : (
-    <MapView style={styles.map} region={region}>
-      {mapMarkers()}
-    </MapView>
+    <View style={styles.container}>
+      <MapView style={styles.map} region={region}>
+        {before ? null : mapMarkers()}
+      </MapView>
+      <View style={styles.buttonContainer}>
+        {before ? (
+          <Button
+            title="Start"
+            onPress={() => {
+              setBefore(false);
+            }}
+          ></Button>
+        ) : null}
+        <TouchableOpacity style={[styles.bubble, styles.button]}>
+          <Text style={styles.bottomBarContent}>
+            {parseFloat(distTravelled).toFixed(2)} km
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 }
 
@@ -133,5 +135,24 @@ const styles = StyleSheet.create({
   },
   map: {
     ...StyleSheet.absoluteFillObject,
+  },
+
+  bubble: {
+    flex: 1,
+    backgroundColor: "rgba(255,255,255,0.7)",
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 20,
+  },
+  button: {
+    width: 80,
+    paddingHorizontal: 12,
+    alignItems: "center",
+    marginHorizontal: 10,
+  },
+  buttonContainer: {
+    flexDirection: "row",
+    marginVertical: 20,
+    backgroundColor: "transparent",
   },
 });
